@@ -12,17 +12,62 @@ app.post('/analyze', async (req, res) => {
     return res.status(400).json({ error: 'system_description is required' });
   }
 
-  const prompt = `You are a senior security architect performing a formal threat model.
+  const fw = framework || 'STRIDE+DREAD';
+  let schema, rules;
 
-Analyze the following system and identify security threats using the ${framework || 'STRIDE+DREAD'} framework.
+  if (fw === 'STRIDE') {
+    schema = `{
+  "threats": [
+    {
+      "name": "Short threat name",
+      "stride_category": "One of: Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, Elevation of Privilege",
+      "severity": "One of: Critical, High, Medium, Low",
+      "component": "Affected component or layer",
+      "description": "2-3 sentence description of the threat and how it could be exploited",
+      "mitigation": "Specific, actionable mitigation recommendation",
+      "dread_score": null,
+      "dread": null
+    }
+  ]
+}`;
+    rules = `- Identify 6-10 distinct threats specific to the system
+- Categorize each using STRIDE only, no numerical scoring
+- Set dread_score and dread to null
+- Order threats by severity (Critical first)
+- Return only the JSON object, nothing else`;
 
-System description:
-"""
-${system_description}
-"""
+  } else if (fw === 'DREAD') {
+    schema = `{
+  "threats": [
+    {
+      "name": "Short threat name",
+      "stride_category": null,
+      "severity": "One of: Critical, High, Medium, Low",
+      "component": "Affected component or layer",
+      "description": "2-3 sentence description of the threat and how it could be exploited",
+      "mitigation": "Specific, actionable mitigation recommendation",
+      "dread_score": 7,
+      "dread": {
+        "damage": 8,
+        "reproducibility": 7,
+        "exploitability": 6,
+        "affected_users": 9,
+        "discoverability": 7,
+        "likelihood": 6
+      }
+    }
+  ]
+}`;
+    rules = `- Identify 6-10 distinct threats specific to the system
+- Score each using DREAD only, set stride_category to null
+- DREAD scores are integers 1-10
+- dread_score is the average of the 6 DREAD values
+- Severity: 8-10 = Critical, 6-7 = High, 4-5 = Medium, 1-3 = Low
+- Order threats by dread_score descending
+- Return only the JSON object, nothing else`;
 
-Return ONLY a valid JSON object with this exact structure (no markdown, no explanation):
-{
+  } else {
+    schema = `{
   "threats": [
     {
       "name": "Short threat name",
@@ -42,15 +87,29 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no expla
       }
     }
   ]
-}
-
-Rules:
-- Identify 6-10 distinct threats
-- Be specific to the described system, not generic
+}`;
+    rules = `- Identify 6-10 distinct threats specific to the system
+- Categorize each using STRIDE and score each using DREAD
 - DREAD scores are integers 1-10
 - dread_score is the average of the 6 DREAD values
 - Order threats by severity (Critical first)
 - Return only the JSON object, nothing else`;
+  }
+
+  const prompt = `You are a senior security architect performing a formal threat model.
+
+Analyze the following system and identify security threats using the ${fw} framework.
+
+System description:
+"""
+${system_description}
+"""
+
+Return ONLY a valid JSON object with this exact structure (no markdown, no explanation):
+${schema}
+
+Rules:
+${rules}`;
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
