@@ -3,7 +3,7 @@ const cors = require('cors');
 
 const app = express();
 app.use(express.json());
-app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
+app.use(cors());
 
 app.post('/analyze', async (req, res) => {
   const { system_description, framework } = req.body;
